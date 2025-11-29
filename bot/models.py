@@ -1,7 +1,7 @@
 from datetime import datetime, date
 
-from sqlalchemy import Date, DateTime, Float, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
@@ -31,5 +31,32 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    meals: Mapped[list["Meal"]] = relationship("Meal", back_populates="user")
+
     def __repr__(self) -> str:
         return f"<User telegram_id={self.telegram_id}>"
+
+
+class Meal(Base):
+    __tablename__ = "meals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    meal_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=True
+    )
+    meal_type: Mapped[str] = mapped_column(String(20))
+    raw_text: Mapped[str] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    calories: Mapped[float | None] = mapped_column(Float, nullable=True)
+    protein_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fat_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    carbs_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fiber_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sugar_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    user: Mapped[User] = relationship("User", back_populates="meals")

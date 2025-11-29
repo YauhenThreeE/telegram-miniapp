@@ -52,9 +52,9 @@ def skip_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 def main_menu(lang: str) -> ReplyKeyboardMarkup:
     buttons = [
-        [KeyboardButton(text=t(lang, "btn_log_meal")), KeyboardButton(text=t(lang, "btn_photo_meal"))],
+        [KeyboardButton(text=t(lang, "menu_log_meal")), KeyboardButton(text=t(lang, "btn_photo_meal"))],
         [KeyboardButton(text=t(lang, "btn_water")), KeyboardButton(text=t(lang, "btn_weight"))],
-        [KeyboardButton(text=t(lang, "btn_stats"))],
+        [KeyboardButton(text=t(lang, "menu_stats"))],
         [KeyboardButton(text=t(lang, "btn_fridge")), KeyboardButton(text=t(lang, "btn_budget"))],
         [KeyboardButton(text=t(lang, "btn_recipes"))],
         [KeyboardButton(text=t(lang, "btn_ask"))],
@@ -69,5 +69,15 @@ def profile_edit_keyboard(lang: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=t(lang, "profile_field_height"), callback_data="edit_height")],
         [InlineKeyboardButton(text=t(lang, "profile_field_activity_level"), callback_data="edit_activity")],
         [InlineKeyboardButton(text=t(lang, "profile_field_nutrition_goal"), callback_data="edit_goal")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def meal_type_keyboard(lang: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=t(lang, "meal_type_breakfast"), callback_data="mealtype_breakfast")],
+        [InlineKeyboardButton(text=t(lang, "meal_type_lunch"), callback_data="mealtype_lunch")],
+        [InlineKeyboardButton(text=t(lang, "meal_type_dinner"), callback_data="mealtype_dinner")],
+        [InlineKeyboardButton(text=t(lang, "meal_type_snack"), callback_data="mealtype_snack")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
