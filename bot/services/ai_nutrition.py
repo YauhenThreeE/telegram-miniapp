@@ -28,3 +28,26 @@ class AiNutritionService:
             "ai_notes": "Approximate values based on user description.",
             "language": language,
         }
+
+    async def estimate_meal_from_photo(
+        self, photo_bytes: bytes | None = None, photo_metadata: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Return mocked nutrition estimates for a provided meal photo.
+
+        TODO: Replace this stub with a real integration to a vision-capable model
+        (e.g., OpenAI Vision) using `photo_bytes`. The `photo_metadata` can include
+        Telegram file identifiers, dimensions, or other helpful hints for
+        downstream APIs.
+        """
+
+        return {
+            "calories": 600.0,
+            "protein_g": 25.0,
+            "fat_g": 20.0,
+            "carbs_g": 70.0,
+            "fiber_g": 6.0,
+            "sugar_g": 12.0,
+            "ai_notes": "Approximate values based on generic meal photo stub.",
+            "metadata": photo_metadata,
+        }

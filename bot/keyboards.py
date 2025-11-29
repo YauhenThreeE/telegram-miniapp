@@ -52,7 +52,10 @@ def skip_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 def main_menu(lang: str) -> ReplyKeyboardMarkup:
     buttons = [
-        [KeyboardButton(text=t(lang, "menu_log_meal")), KeyboardButton(text=t(lang, "btn_photo_meal"))],
+        [
+            KeyboardButton(text=t(lang, "menu_log_meal")),
+            KeyboardButton(text=t(lang, "menu_photo_meal")),
+        ],
         [KeyboardButton(text=t(lang, "btn_water")), KeyboardButton(text=t(lang, "btn_weight"))],
         [KeyboardButton(text=t(lang, "menu_stats"))],
         [KeyboardButton(text=t(lang, "btn_fridge")), KeyboardButton(text=t(lang, "btn_budget"))],

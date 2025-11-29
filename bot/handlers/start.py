@@ -277,7 +277,6 @@ async def save_onboarding(state: FSMContext, telegram_id: int) -> None:
             t(lang, key)
             for lang in SUPPORTED_LANGUAGES
             for key in [
-                "btn_photo_meal",
                 "btn_water",
                 "btn_weight",
                 "btn_fridge",
