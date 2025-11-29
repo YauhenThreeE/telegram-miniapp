@@ -1,0 +1,73 @@
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
+
+from .i18n import SUPPORTED_LANGUAGES, t
+
+
+def language_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=code.upper(), callback_data=f"lang_{code}")]
+        for code in SUPPORTED_LANGUAGES
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def sex_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(text=t(lang, "sex_m"))],
+        [KeyboardButton(text=t(lang, "sex_f"))],
+        [KeyboardButton(text=t(lang, "sex_other"))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
+
+
+def activity_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(text=t(lang, "activity_low"))],
+        [KeyboardButton(text=t(lang, "activity_medium"))],
+        [KeyboardButton(text=t(lang, "activity_high"))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
+
+
+def nutrition_goal_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(text=t(lang, "goal_weight_loss"))],
+        [KeyboardButton(text=t(lang, "goal_maintenance"))],
+        [KeyboardButton(text=t(lang, "goal_weight_gain"))],
+        [KeyboardButton(text=t(lang, "goal_symptom_control"))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
+
+
+def skip_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t(lang, "skip"))]], resize_keyboard=True, one_time_keyboard=True
+    )
+
+
+def main_menu(lang: str) -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(text=t(lang, "btn_log_meal")), KeyboardButton(text=t(lang, "btn_photo_meal"))],
+        [KeyboardButton(text=t(lang, "btn_water")), KeyboardButton(text=t(lang, "btn_weight"))],
+        [KeyboardButton(text=t(lang, "btn_stats"))],
+        [KeyboardButton(text=t(lang, "btn_fridge")), KeyboardButton(text=t(lang, "btn_budget"))],
+        [KeyboardButton(text=t(lang, "btn_recipes"))],
+        [KeyboardButton(text=t(lang, "btn_ask"))],
+        [KeyboardButton(text=t(lang, "btn_profile"))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def profile_edit_keyboard(lang: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=t(lang, "profile_field_weight"), callback_data="edit_weight")],
+        [InlineKeyboardButton(text=t(lang, "profile_field_height"), callback_data="edit_height")],
+        [InlineKeyboardButton(text=t(lang, "profile_field_activity_level"), callback_data="edit_activity")],
+        [InlineKeyboardButton(text=t(lang, "profile_field_nutrition_goal"), callback_data="edit_goal")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
