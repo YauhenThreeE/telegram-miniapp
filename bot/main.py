@@ -6,10 +6,25 @@ from aiogram import Bot, Dispatcher
 from . import models  # noqa: F401
 from .config import load_config
 from .db import init_db, setup_database
-from .handlers import ask, food, photo_meal, profile, start, stats, water, weight
+from .handlers import (
+    ask,
+    delete_me,
+    food,
+    help as help_handler,
+    misc,
+    photo_meal,
+    profile,
+    start,
+    stats,
+    water,
+    weight,
+)
 from .services import build_ai_dietitian_service, build_ai_nutrition_service
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +49,9 @@ async def main() -> None:
     dp.include_router(stats.router)
     dp.include_router(ask.router)
     dp.include_router(profile.router)
+    dp.include_router(help_handler.router)
+    dp.include_router(delete_me.router)
+    dp.include_router(misc.router)
 
     logger.info("Bot started")
     await dp.start_polling(bot)

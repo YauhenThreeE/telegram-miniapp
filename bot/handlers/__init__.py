@@ -7,4 +7,7 @@ __all__ = [
     "water",
     "weight",
     "ask",
+    "help",
+    "delete_me",
+    "misc",
 ]

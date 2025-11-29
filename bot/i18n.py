@@ -106,7 +106,29 @@ translations: dict[str, dict[str, str]] = {
         "ask_dietitian_prompt": "What would you like to ask?",
         "ask_dietitian_disclaimer": "I am not a doctor and this is not medical advice. For serious or persistent symptoms, please consult a healthcare professional.",
         "ask_dietitian_error": "Error while generating a response. Please try again later.",
-        "unknown_command": "I don’t understand this command.",
+        "unknown_command": "I don’t understand this command. Use /help to see available features.",
+        "help_text": (
+            "I am your AI nutrition and digestion assistant. I can:\n"
+            "- track your meals (text and photos)\n"
+            "- estimate calories and macros (approximate)\n"
+            "- track water and weight\n"
+            "- show daily stats\n"
+            "- answer questions about diet and digestion via AI (/ask)\n\n"
+            "Commands:\n"
+            "/start - start or reset onboarding\n"
+            "/profile - show and edit your profile\n"
+            "/stats - today’s stats\n"
+            "/water - add water intake\n"
+            "/weight - log weight\n"
+            "/ask - ask the AI dietitian\n"
+            "/delete_me - delete all your data"
+        ),
+        "delete_me_intro": "This will delete ALL your data: profile, meals, water, weight, history and AI chats. This action cannot be undone.",
+        "delete_me_confirm_text": "Are you sure you want to delete all your data?",
+        "delete_me_confirm_button_yes": "Yes, delete everything",
+        "delete_me_confirm_button_no": "No, cancel",
+        "delete_me_cancelled": "Deletion cancelled. Your data is safe.",
+        "delete_me_done": "All your data has been deleted. If you start again with /start, a new profile will be created.",
     },
     "ru": {
         "welcome": "Добро пожаловать к вашему ИИ-диетологу! Давайте настроим профиль.",
@@ -211,7 +233,29 @@ translations: dict[str, dict[str, str]] = {
         "ask_dietitian_prompt": "Что вы хотите спросить?",
         "ask_dietitian_disclaimer": "Я не врач и это не медицинская консультация. При серьёзных или продолжающихся симптомах обратитесь к врачу.",
         "ask_dietitian_error": "Ошибка при подготовке ответа. Попробуйте позже.",
-        "unknown_command": "Не понимаю эту команду.",
+        "unknown_command": "Не понимаю эту команду. Используйте /help, чтобы увидеть доступные функции.",
+        "help_text": (
+            "Я ваш ИИ-помощник по питанию и пищеварению. Я могу:\n"
+            "- вести учёт приёмов пищи (текст и фото)\n"
+            "- приблизительно оценивать калории и макросы\n"
+            "- учитывать воду и вес\n"
+            "- показывать дневную статистику\n"
+            "- отвечать на вопросы о питании через ИИ (/ask)\n\n"
+            "Команды:\n"
+            "/start - начать или пройти онбординг заново\n"
+            "/profile - показать и редактировать профиль\n"
+            "/stats - статистика за сегодня\n"
+            "/water - добавить воду\n"
+            "/weight - записать вес\n"
+            "/ask - спросить ИИ-диетолога\n"
+            "/delete_me - удалить все данные"
+        ),
+        "delete_me_intro": "Это удалит ВСЕ ваши данные: профиль, приёмы пищи, воду, вес, историю и диалоги с ИИ. Действие необратимо.",
+        "delete_me_confirm_text": "Вы уверены, что хотите удалить все данные?",
+        "delete_me_confirm_button_yes": "Да, удалить всё",
+        "delete_me_confirm_button_no": "Нет, отменить",
+        "delete_me_cancelled": "Удаление отменено. Ваши данные в сохранности.",
+        "delete_me_done": "Все ваши данные удалены. Если начнёте снова через /start, будет создан новый профиль.",
     },
     "pl": {
         "welcome": "Witamy u twojego AI dietetyka! Ustawmy profil.",
@@ -316,7 +360,29 @@ translations: dict[str, dict[str, str]] = {
         "ask_dietitian_prompt": "O co chcesz zapytać?",
         "ask_dietitian_disclaimer": "Nie jestem lekarzem i to nie jest porada medyczna. Przy poważnych lub utrzymujących się objawach skonsultuj się z lekarzem.",
         "ask_dietitian_error": "Błąd podczas generowania odpowiedzi. Spróbuj ponownie później.",
-        "unknown_command": "Nie rozumiem tej komendy.",
+        "unknown_command": "Nie rozumiem tej komendy. Użyj /help, aby zobaczyć dostępne funkcje.",
+        "help_text": (
+            "Jestem twoim asystentem AI od żywienia i trawienia. Mogę:\n"
+            "- zapisywać posiłki (tekst i zdjęcia)\n"
+            "- szacować kalorie i makro (przybliżone)\n"
+            "- śledzić wodę i wagę\n"
+            "- pokazywać dzienne statystyki\n"
+            "- odpowiadać na pytania o dietę przez AI (/ask)\n\n"
+            "Komendy:\n"
+            "/start - rozpocznij lub zresetuj onboarding\n"
+            "/profile - pokaż i edytuj profil\n"
+            "/stats - statystyki na dziś\n"
+            "/water - dodaj wodę\n"
+            "/weight - zapisz wagę\n"
+            "/ask - zapytaj AI dietetyka\n"
+            "/delete_me - usuń wszystkie dane"
+        ),
+        "delete_me_intro": "To usunie WSZYSTKIE twoje dane: profil, posiłki, wodę, wagę, historię i czaty z AI. Tego nie da się cofnąć.",
+        "delete_me_confirm_text": "Czy na pewno chcesz usunąć wszystkie dane?",
+        "delete_me_confirm_button_yes": "Tak, usuń wszystko",
+        "delete_me_confirm_button_no": "Nie, anuluj",
+        "delete_me_cancelled": "Usuwanie anulowane. Twoje dane są bezpieczne.",
+        "delete_me_done": "Wszystkie twoje dane zostały usunięte. Jeśli zaczniesz ponownie przez /start, zostanie utworzony nowy profil.",
     },
 }
 
