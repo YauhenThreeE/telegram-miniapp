@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from . import models  # noqa: F401
 from .config import load_config
 from .db import init_db, setup_database
-from .handlers import food, photo_meal, profile, start, stats
+from .handlers import food, photo_meal, profile, start, stats, water, weight
 from .services import build_ai_nutrition_service
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +27,8 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(food.router)
     dp.include_router(photo_meal.router)
+    dp.include_router(water.router)
+    dp.include_router(weight.router)
     dp.include_router(stats.router)
     dp.include_router(profile.router)
 

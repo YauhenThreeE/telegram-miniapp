@@ -56,7 +56,7 @@ def main_menu(lang: str) -> ReplyKeyboardMarkup:
             KeyboardButton(text=t(lang, "menu_log_meal")),
             KeyboardButton(text=t(lang, "menu_photo_meal")),
         ],
-        [KeyboardButton(text=t(lang, "btn_water")), KeyboardButton(text=t(lang, "btn_weight"))],
+        [KeyboardButton(text=t(lang, "menu_water")), KeyboardButton(text=t(lang, "menu_weight"))],
         [KeyboardButton(text=t(lang, "menu_stats"))],
         [KeyboardButton(text=t(lang, "btn_fridge")), KeyboardButton(text=t(lang, "btn_budget"))],
         [KeyboardButton(text=t(lang, "btn_recipes"))],
@@ -82,5 +82,16 @@ def meal_type_keyboard(lang: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=t(lang, "meal_type_lunch"), callback_data="mealtype_lunch")],
         [InlineKeyboardButton(text=t(lang, "meal_type_dinner"), callback_data="mealtype_dinner")],
         [InlineKeyboardButton(text=t(lang, "meal_type_snack"), callback_data="mealtype_snack")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def water_presets_keyboard(lang: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=t(lang, "water_preset_200"), callback_data="water_ml_200")],
+        [InlineKeyboardButton(text=t(lang, "water_preset_250"), callback_data="water_ml_250")],
+        [InlineKeyboardButton(text=t(lang, "water_preset_300"), callback_data="water_ml_300")],
+        [InlineKeyboardButton(text=t(lang, "water_preset_500"), callback_data="water_ml_500")],
+        [InlineKeyboardButton(text=t(lang, "water_other_amount"), callback_data="water_other")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

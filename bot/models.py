@@ -42,6 +42,12 @@ class User(Base):
     )
 
     meals: Mapped[list["Meal"]] = relationship("Meal", back_populates="user")
+    water_intakes: Mapped[list["WaterIntake"]] = relationship(
+        "WaterIntake", back_populates="user"
+    )
+    weight_logs: Mapped[list["WeightLog"]] = relationship(
+        "WeightLog", back_populates="user"
+    )
 
     def __repr__(self) -> str:
         return f"<User telegram_id={self.telegram_id}>"
@@ -72,3 +78,29 @@ class Meal(Base):
     ai_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship("User", back_populates="meals")
+
+
+class WaterIntake(Base):
+    __tablename__ = "water_intakes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    datetime: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    volume_ml: Mapped[float] = mapped_column(Float, nullable=False)
+
+    user: Mapped[User] = relationship("User", back_populates="water_intakes")
+
+
+class WeightLog(Base):
+    __tablename__ = "weight_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    datetime: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    weight_kg: Mapped[float] = mapped_column(Float, nullable=False)
+
+    user: Mapped[User] = relationship("User", back_populates="weight_logs")

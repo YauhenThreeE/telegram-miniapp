@@ -6,10 +6,11 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import func, select
+from sqlalchemy.sql import desc
 
 from ..db import async_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
-from ..models import Meal, User
+from ..models import Meal, User, WaterIntake, WeightLog
 
 router = Router()
 
@@ -54,43 +55,71 @@ async def daily_stats(message: Message) -> None:
                     Meal.created_at < end,
                 )
             )
-            result = await session.execute(totals_stmt)
-            totals = result.one_or_none()
+            totals = (await session.execute(totals_stmt)).one_or_none()
+
+            water_stmt = (
+                select(func.sum(WaterIntake.volume_ml))
+                .where(
+                    WaterIntake.user_id == user.id,
+                    WaterIntake.datetime >= start,
+                    WaterIntake.datetime < end,
+                )
+                .limit(1)
+            )
+            water_total = await session.scalar(water_stmt)
+
+            last_weight = await session.scalar(
+                select(WeightLog)
+                    .where(WeightLog.user_id == user.id)
+                    .order_by(desc(WeightLog.datetime))
+            )
     except Exception:
         await message.answer(t(lang, "stats_error"))
         return
 
-    if not totals or all(value is None for value in totals):
-        await message.answer(t(lang, "stats_today_no_meals"))
-        return
-
-    calories, protein, fat, carbs, fiber, sugar = (
-        totals[0] or 0,
-        totals[1] or 0,
-        totals[2] or 0,
-        totals[3] or 0,
-        totals[4] or 0,
-        totals[5] or 0,
-    )
-
     lines = [t(lang, "stats_today_title")]
-    lines.append(
-        t(
-            lang,
-            "stats_today_line",
-            calories=_fmt(calories),
-            protein=_fmt(protein),
-            fat=_fmt(fat),
-            carbs=_fmt(carbs),
+    if totals and not all(value is None for value in totals):
+        calories, protein, fat, carbs, fiber, sugar = (
+            totals[0] or 0,
+            totals[1] or 0,
+            totals[2] or 0,
+            totals[3] or 0,
+            totals[4] or 0,
+            totals[5] or 0,
         )
-    )
-    if fiber or sugar:
+
         lines.append(
             t(
                 lang,
-                "stats_today_macros_title",
+                "stats_today_line",
+                calories=_fmt(calories),
+                protein=_fmt(protein),
+                fat=_fmt(fat),
+                carbs=_fmt(carbs),
             )
-            + f"\nFiber: {_fmt(fiber)} g, Sugar: {_fmt(sugar)} g"
+        )
+        if fiber or sugar:
+            lines.append(
+                t(
+                    lang,
+                    "stats_today_macros_title",
+                )
+                + f"\nFiber: {_fmt(fiber)} g, Sugar: {_fmt(sugar)} g"
+            )
+    else:
+        lines.append(t(lang, "stats_today_no_meals"))
+
+    if water_total:
+        lines.append(t(lang, "stats_today_water_line", ml=int(water_total)))
+
+    if last_weight:
+        lines.append(
+            t(
+                lang,
+                "stats_last_weight_line",
+                weight=_fmt(last_weight.weight_kg),
+                date=last_weight.datetime.date().isoformat(),
+            )
         )
 
     await message.answer("\n".join(lines))
