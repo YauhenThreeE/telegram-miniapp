@@ -48,6 +48,9 @@ class User(Base):
     weight_logs: Mapped[list["WeightLog"]] = relationship(
         "WeightLog", back_populates="user"
     )
+    conversation_messages: Mapped[list["ConversationMessage"]] = relationship(
+        "ConversationMessage", back_populates="user"
+    )
 
     def __repr__(self) -> str:
         return f"<User telegram_id={self.telegram_id}>"
@@ -104,3 +107,17 @@ class WeightLog(Base):
     weight_kg: Mapped[float] = mapped_column(Float, nullable=False)
 
     user: Mapped[User] = relationship("User", back_populates="weight_logs")
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="conversation_messages")

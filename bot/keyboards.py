@@ -60,7 +60,7 @@ def main_menu(lang: str) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=t(lang, "menu_stats"))],
         [KeyboardButton(text=t(lang, "btn_fridge")), KeyboardButton(text=t(lang, "btn_budget"))],
         [KeyboardButton(text=t(lang, "btn_recipes"))],
-        [KeyboardButton(text=t(lang, "btn_ask"))],
+        [KeyboardButton(text=t(lang, "menu_ask_dietitian"))],
         [KeyboardButton(text=t(lang, "btn_profile"))],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
