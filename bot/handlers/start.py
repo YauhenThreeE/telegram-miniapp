@@ -16,6 +16,7 @@ from ..keyboards import (
     language_keyboard,
     main_menu,
     nutrition_goal_keyboard,
+    none_keyboard,
     sex_keyboard,
     skip_keyboard,
 )
@@ -175,7 +176,7 @@ async def onboarding_goal_weight(message: Message, state: FSMContext) -> None:
             return
         await state.update_data(goal_weight_kg=value)
     await state.set_state(Onboarding.gi_diagnoses)
-    await message.answer(t(lang, "ask_gi_diagnoses"))
+    await message.answer(t(lang, "ask_gi_diagnoses"), reply_markup=none_keyboard(lang))
 
 
 @router.message(Onboarding.gi_diagnoses)
@@ -184,7 +185,7 @@ async def onboarding_gi(message: Message, state: FSMContext) -> None:
     lang = data.get("language", "en")
     await state.update_data(gi_diagnoses=message.text)
     await state.set_state(Onboarding.other_diagnoses)
-    await message.answer(t(lang, "ask_other_diagnoses"))
+    await message.answer(t(lang, "ask_other_diagnoses"), reply_markup=none_keyboard(lang))
 
 
 @router.message(Onboarding.other_diagnoses)
@@ -193,7 +194,7 @@ async def onboarding_other_diagnoses(message: Message, state: FSMContext) -> Non
     lang = data.get("language", "en")
     await state.update_data(other_diagnoses=message.text)
     await state.set_state(Onboarding.medications)
-    await message.answer(t(lang, "ask_medications"))
+    await message.answer(t(lang, "ask_medications"), reply_markup=none_keyboard(lang))
 
 
 @router.message(Onboarding.medications)
@@ -202,7 +203,7 @@ async def onboarding_medications(message: Message, state: FSMContext) -> None:
     lang = data.get("language", "en")
     await state.update_data(medications=message.text)
     await state.set_state(Onboarding.allergies_intolerances)
-    await message.answer(t(lang, "ask_allergies"))
+    await message.answer(t(lang, "ask_allergies"), reply_markup=none_keyboard(lang))
 
 
 @router.message(Onboarding.allergies_intolerances)
@@ -219,11 +220,11 @@ async def onboarding_activity(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     mapping = {
-        t(lang, "activity_low"): "low",
-        t(lang, "activity_medium"): "medium",
-        t(lang, "activity_high"): "high",
+        t(lang, "activity_low").lower(): "low",
+        t(lang, "activity_medium").lower(): "medium",
+        t(lang, "activity_high").lower(): "high",
     }
-    value = mapping.get(message.text)
+    value = mapping.get((message.text or "").strip().lower())
     if value is None:
         await message.answer(t(lang, "ask_activity_level"), reply_markup=activity_keyboard(lang))
         return
@@ -237,12 +238,12 @@ async def onboarding_goal(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     mapping = {
-        t(lang, "goal_weight_loss"): "weight_loss",
-        t(lang, "goal_maintenance"): "maintenance",
-        t(lang, "goal_weight_gain"): "weight_gain",
-        t(lang, "goal_symptom_control"): "symptom_control",
+        t(lang, "goal_weight_loss").lower(): "weight_loss",
+        t(lang, "goal_maintenance").lower(): "maintenance",
+        t(lang, "goal_weight_gain").lower(): "weight_gain",
+        t(lang, "goal_symptom_control").lower(): "symptom_control",
     }
-    value = mapping.get(message.text)
+    value = mapping.get((message.text or "").strip().lower())
     if value is None:
         await message.answer(t(lang, "ask_nutrition_goal"), reply_markup=nutrition_goal_keyboard(lang))
         return

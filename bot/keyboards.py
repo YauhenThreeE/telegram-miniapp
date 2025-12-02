@@ -50,6 +50,14 @@ def skip_keyboard(lang: str) -> ReplyKeyboardMarkup:
     )
 
 
+def none_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t(lang, "none_button"))]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
 def main_menu(lang: str) -> ReplyKeyboardMarkup:
     buttons = [
         [
