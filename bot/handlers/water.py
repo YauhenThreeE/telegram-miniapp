@@ -1,66 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy import func, select
 
-from ..db import get_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import main_menu, water_presets_keyboard
-from ..models import User, WaterIntake
+from ..models import User
+from ..services.water_service import add_water_and_total
 
 router = Router()
 
 
 class WaterStates(StatesGroup):
     waiting_amount = State()
-
-
-async def _today_range_utc() -> tuple[datetime, datetime]:
-    now = datetime.now(timezone.utc)
-    start = datetime(year=now.year, month=now.month, day=now.day, tzinfo=timezone.utc)
-    end = start + timedelta(days=1)
-    return start, end
-
-
-async def _load_user(bot: object, telegram_id: int) -> User | None:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        return await session.scalar(select(User).where(User.telegram_id == telegram_id))
-
-
-async def _ensure_user(message: Message) -> tuple[User | None, str]:
-    user = await _load_user(message.bot, message.from_user.id)
-    lang = user.language if user else "en"
-    if not user:
-        await message.answer(t(lang, "profile_missing"))
-    return user, lang
-
-
-async def _save_water_and_total(bot: object, user_id: int, volume_ml: float) -> float:
-    start, end = await _today_range_utc()
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        intake = WaterIntake(user_id=user_id, volume_ml=volume_ml)
-        session.add(intake)
-        await session.commit()
-
-        total_stmt = (
-            select(func.sum(WaterIntake.volume_ml))
-            .where(
-                WaterIntake.user_id == user_id,
-                WaterIntake.datetime >= start,
-                WaterIntake.datetime < end,
-            )
-            .limit(1)
-        )
-        total_ml = await session.scalar(total_stmt)
-        return float(total_ml or 0)
 
 
 def _parse_amount(text: str) -> float | None:
@@ -72,8 +27,13 @@ def _parse_amount(text: str) -> float | None:
 
 @router.message(Command("water"))
 @router.message(F.text.in_({t(lang, "menu_water") for lang in SUPPORTED_LANGUAGES}))
-async def start_water_log(message: Message, state: FSMContext) -> None:
-    user, lang = await _ensure_user(message)
+async def start_water_log(
+    message: Message,
+    state: FSMContext,
+    user: User | None,
+    lang: str,
+    session_maker,
+) -> None:
     if not user:
         return
 
@@ -83,7 +43,7 @@ async def start_water_log(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(WaterStates.waiting_amount, F.data.startswith("water_ml_"))
-async def water_preset_selected(callback: CallbackQuery, state: FSMContext) -> None:
+async def water_preset_selected(callback: CallbackQuery, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     user_id = data.get("user_id")
@@ -99,7 +59,8 @@ async def water_preset_selected(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer()
         return
 
-    total_ml = await _save_water_and_total(callback.bot, user_id, volume)
+    async with session_maker() as session:
+        total_ml = await add_water_and_total(session, user_id, volume)
     await callback.message.answer(
         "\n".join(
             [
@@ -122,7 +83,7 @@ async def water_other_amount(callback: CallbackQuery, state: FSMContext) -> None
 
 
 @router.message(WaterStates.waiting_amount)
-async def water_amount_entered(message: Message, state: FSMContext) -> None:
+async def water_amount_entered(message: Message, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     user_id = data.get("user_id")
@@ -136,7 +97,8 @@ async def water_amount_entered(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, "water_invalid_amount"))
         return
 
-    total_ml = await _save_water_and_total(message.bot, user_id, amount)
+    async with session_maker() as session:
+        total_ml = await add_water_and_total(session, user_id, amount)
     await message.answer(
         "\n".join(
             [t(lang, "water_saved"), t(lang, "water_today_total", ml=int(total_ml))]

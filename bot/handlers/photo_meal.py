@@ -7,13 +7,12 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy import select
 
-from ..db import async_session_maker, get_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import main_menu, meal_type_keyboard
-from ..models import Meal, User
+from ..models import User
 from ..services.ai_nutrition import AiNutritionService
+from ..services.meal_service import log_photo_meal
 
 router = Router()
 
@@ -23,24 +22,9 @@ class PhotoMealLog(StatesGroup):
     waiting_photo = State()
 
 
-async def _load_user(bot: object, telegram_id: int) -> User | None:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        return await session.scalar(select(User).where(User.telegram_id == telegram_id))
-
-
-async def _ensure_user(message: Message) -> tuple[User | None, str]:
-    user = await _load_user(message.bot, message.from_user.id)
-    lang = user.language if user else "en"
-    if not user:
-        await message.answer(t(lang, "profile_missing"))
-    return user, lang
-
-
 @router.message(Command("photo_meal", "meal_photo", "mealpic"))
 @router.message(F.text.in_({t(lang, "menu_photo_meal") for lang in SUPPORTED_LANGUAGES}))
-async def start_photo_meal_log(message: Message, state: FSMContext) -> None:
-    user, lang = await _ensure_user(message)
+async def start_photo_meal_log(message: Message, state: FSMContext, user: User | None, lang: str) -> None:
     if not user:
         return
 
@@ -69,14 +53,17 @@ async def photo_meal_type_selected(callback: CallbackQuery, state: FSMContext) -
 
 
 @router.message(PhotoMealLog.waiting_photo)
-async def meal_photo_received(message: Message, state: FSMContext) -> None:
+async def meal_photo_received(
+    message: Message,
+    state: FSMContext,
+    user: User | None,
+    lang: str,
+    session_maker,
+) -> None:
     data = await state.get_data()
-    lang = data.get("language", "en")
-    user_id = data.get("user_id")
     meal_type = data.get("meal_type")
-    session_maker = get_session_maker(message.bot)
 
-    if not user_id or not meal_type:
+    if not user or not meal_type:
         await message.answer(t(lang, "profile_missing"))
         await state.clear()
         return
@@ -102,37 +89,23 @@ async def meal_photo_received(message: Message, state: FSMContext) -> None:
             except Exception:
                 photo_bytes = None
 
-        estimates = (
-            await ai_service.estimate_meal_from_photo(
+        photo_metadata = {"file_id": file_id, "file_unique_id": photo.file_unique_id}
+        async with session_maker() as session:
+            _, estimates = await log_photo_meal(
+                session=session,
+                user_id=user.id,
+                meal_type=meal_type,
+                lang=lang,
+                caption=message.caption,
+                photo_file_id=file_id,
+                ai_service=ai_service,
                 photo_bytes=photo_bytes,
-                photo_metadata={"file_id": file_id, "file_unique_id": photo.file_unique_id},
+                photo_metadata=photo_metadata,
             )
-            if ai_service
-            else {}
-        )
     except Exception:
         await message.answer(t(lang, "error_photo_processing"))
         await state.clear()
         return
-
-    async with session_maker() as session:
-        meal = Meal(
-            user_id=user_id,
-            meal_type=meal_type,
-            is_from_photo=True,
-            photo_file_id=file_id,
-            raw_text=message.caption,
-            language=lang,
-            calories=estimates.get("calories"),
-            protein_g=estimates.get("protein_g"),
-            fat_g=estimates.get("fat_g"),
-            carbs_g=estimates.get("carbs_g"),
-            fiber_g=estimates.get("fiber_g"),
-            sugar_g=estimates.get("sugar_g"),
-            ai_notes=estimates.get("ai_notes"),
-        )
-        session.add(meal)
-        await session.commit()
 
     await message.answer(t(lang, "meal_photo_saved"))
     await message.answer(

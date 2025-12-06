@@ -3,19 +3,11 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import delete, select
-
-from ..db import get_session_maker
 from ..i18n import t
-from ..models import ConversationMessage, Meal, Recipe, User, WaterIntake, WeightLog
+from ..models import User
+from ..services.user_service import delete_user_with_data
 
 router = Router()
-
-
-async def _load_user(bot: object, telegram_id: int) -> User | None:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        return await session.scalar(select(User).where(User.telegram_id == telegram_id))
 
 
 def _confirm_keyboard(lang: str, telegram_id: int) -> InlineKeyboardMarkup:
@@ -38,9 +30,7 @@ def _confirm_keyboard(lang: str, telegram_id: int) -> InlineKeyboardMarkup:
 
 
 @router.message(Command("delete_me"))
-async def delete_me_command(message: Message) -> None:
-    user = await _load_user(message.bot, message.from_user.id)
-    lang = user.language if user else "en"
+async def delete_me_command(message: Message, user: User | None, lang: str) -> None:
     if not user:
         await message.answer(t(lang, "profile_missing"))
         return
@@ -52,39 +42,29 @@ async def delete_me_command(message: Message) -> None:
 
 
 @router.callback_query(F.data.startswith("delete_me_no:"))
-async def delete_me_cancel(callback: CallbackQuery) -> None:
+async def delete_me_cancel(callback: CallbackQuery, user: User | None, lang: str) -> None:
     _, telegram_id = callback.data.split(":", 1)
     if str(callback.from_user.id) != telegram_id:
         await callback.answer()
         return
-    user = await _load_user(callback.bot, callback.from_user.id)
-    lang = user.language if user else "en"
     await callback.message.answer(t(lang, "delete_me_cancelled"))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("delete_me_yes:"))
-async def delete_me_confirm(callback: CallbackQuery) -> None:
+async def delete_me_confirm(callback: CallbackQuery, user: User | None, lang: str, session_maker) -> None:
     _, telegram_id = callback.data.split(":", 1)
     if str(callback.from_user.id) != telegram_id:
         await callback.answer()
         return
-    user = await _load_user(callback.bot, callback.from_user.id)
-    lang = user.language if user else "en"
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
         return
 
-    session_maker = get_session_maker(callback.bot)
     async with session_maker() as session:
         async with session.begin():
-            await session.execute(delete(Meal).where(Meal.user_id == user.id))
-            await session.execute(delete(WaterIntake).where(WaterIntake.user_id == user.id))
-            await session.execute(delete(WeightLog).where(WeightLog.user_id == user.id))
-            await session.execute(delete(ConversationMessage).where(ConversationMessage.user_id == user.id))
-            await session.execute(delete(Recipe).where(Recipe.user_id == user.id))
-            await session.execute(delete(User).where(User.id == user.id))
+            await delete_user_with_data(session, user.id)
 
     await callback.message.answer(t(lang, "delete_me_done"))
     await callback.answer()

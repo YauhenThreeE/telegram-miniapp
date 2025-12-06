@@ -22,6 +22,7 @@ from .handlers import (
     weight,
 )
 from .services import build_ai_dietitian_service, build_ai_nutrition_service
+from .middlewares import UserContextMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,6 +66,10 @@ async def main() -> None:
     dp.include_router(help_handler.router)
     dp.include_router(delete_me.router)
     dp.include_router(misc.router)
+
+    # Middlewares: resolve user/lang/session_maker for all updates.
+    dp.message.middleware(UserContextMiddleware())
+    dp.callback_query.middleware(UserContextMiddleware())
 
     logger.info("Bot started")
     await dp.start_polling(bot)

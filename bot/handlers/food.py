@@ -5,12 +5,11 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy import select
 
-from ..db import async_session_maker, get_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import main_menu, meal_type_keyboard
-from ..models import Meal, User
+from ..models import User
+from ..services.meal_service import log_text_meal
 from ..services.ai_nutrition import AiNutritionService
 
 router = Router()
@@ -21,24 +20,9 @@ class MealLog(StatesGroup):
     entering_text = State()
 
 
-async def _load_user(bot: object, telegram_id: int) -> User | None:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        return await session.scalar(select(User).where(User.telegram_id == telegram_id))
-
-
-async def _ensure_user(message: Message) -> tuple[User | None, str]:
-    user = await _load_user(message.bot, message.from_user.id)
-    lang = user.language if user else "en"
-    if not user:
-        await message.answer(t(lang, "profile_missing"))
-    return user, lang
-
-
 @router.message(Command("meal", "food"))
 @router.message(F.text.in_({t(lang, "menu_log_meal") for lang in SUPPORTED_LANGUAGES}))
-async def start_meal_log(message: Message, state: FSMContext) -> None:
-    user, lang = await _ensure_user(message)
+async def start_meal_log(message: Message, state: FSMContext, user: User | None, lang: str) -> None:
     if not user:
         return
 
@@ -66,13 +50,17 @@ async def meal_type_selected(callback: CallbackQuery, state: FSMContext) -> None
 
 
 @router.message(MealLog.entering_text)
-async def meal_text_received(message: Message, state: FSMContext) -> None:
+async def meal_text_received(
+    message: Message,
+    state: FSMContext,
+    user: User | None,
+    lang: str,
+    session_maker,
+) -> None:
     data = await state.get_data()
-    lang = data.get("language", "en")
-    user_id = data.get("user_id")
     meal_type = data.get("meal_type")
 
-    if not user_id or not meal_type:
+    if not user or not meal_type:
         await message.answer(t(lang, "profile_missing"))
         await state.clear()
         return
@@ -82,30 +70,16 @@ async def meal_text_received(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, "ask_meal_text"))
         return
 
-    ai_service: AiNutritionService | None = getattr(message.bot, "ai_service", None)
-    estimates = (
-        await ai_service.estimate_meal_from_text(raw_text, language=lang)
-        if ai_service
-        else {}
-    )
-
-    session_maker = get_session_maker(message.bot)
     async with session_maker() as session:
-        meal = Meal(
-            user_id=user_id,
+        ai_service: AiNutritionService | None = getattr(message.bot, "ai_service", None)
+        _, estimates = await log_text_meal(
+            session=session,
+            user_id=user.id,
             meal_type=meal_type.replace("mealtype_", ""),
             raw_text=raw_text,
-            language=lang,
-            calories=estimates.get("calories"),
-            protein_g=estimates.get("protein_g"),
-            fat_g=estimates.get("fat_g"),
-            carbs_g=estimates.get("carbs_g"),
-            fiber_g=estimates.get("fiber_g"),
-            sugar_g=estimates.get("sugar_g"),
-            ai_notes=estimates.get("ai_notes"),
+            lang=lang,
+            ai_service=ai_service,
         )
-        session.add(meal)
-        await session.commit()
 
     await message.answer(t(lang, "meal_saved"))
     await message.answer(

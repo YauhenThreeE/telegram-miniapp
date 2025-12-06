@@ -5,32 +5,17 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from sqlalchemy import select
 
-from ..db import get_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import main_menu
-from ..models import User, WeightLog
+from ..models import User
+from ..services.weight_service import log_weight
 
 router = Router()
 
 
 class WeightStates(StatesGroup):
     waiting_weight = State()
-
-
-async def _load_user(bot: object, telegram_id: int) -> User | None:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        return await session.scalar(select(User).where(User.telegram_id == telegram_id))
-
-
-async def _ensure_user(message: Message) -> tuple[User | None, str]:
-    user = await _load_user(message.bot, message.from_user.id)
-    lang = user.language if user else "en"
-    if not user:
-        await message.answer(t(lang, "profile_missing"))
-    return user, lang
 
 
 def _format_delta(value: float | None) -> str:
@@ -48,8 +33,7 @@ def _parse_weight(text: str) -> float | None:
 
 @router.message(Command("weight"))
 @router.message(F.text.in_({t(lang, "menu_weight") for lang in SUPPORTED_LANGUAGES}))
-async def start_weight_log(message: Message, state: FSMContext) -> None:
-    user, lang = await _ensure_user(message)
+async def start_weight_log(message: Message, state: FSMContext, user: User | None, lang: str) -> None:
     if not user:
         return
 
@@ -59,12 +43,8 @@ async def start_weight_log(message: Message, state: FSMContext) -> None:
 
 
 @router.message(WeightStates.waiting_weight)
-async def weight_entered(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    lang = data.get("language", "en")
-    user_id = data.get("user_id")
-
-    if not user_id:
+async def weight_entered(message: Message, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
+    if not user:
         await message.answer(t(lang, "profile_missing"))
         await state.clear()
         return
@@ -74,25 +54,11 @@ async def weight_entered(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, "weight_invalid"))
         return
 
-    session_maker = get_session_maker(message.bot)
     async with session_maker() as session:
-        user = await session.get(User, user_id)
-        last_log = await session.scalar(
-            select(WeightLog)
-            .where(WeightLog.user_id == user_id)
-            .order_by(WeightLog.datetime.desc())
-        )
-
-        new_log = WeightLog(user_id=user_id, weight_kg=weight)
-        session.add(new_log)
-
-        if user:
-            user.current_weight_kg = weight
-
-        await session.commit()
+        new_log, last_log = await log_weight(session, user, weight)
 
     delta_since_last = weight - last_log.weight_kg if last_log else None
-    delta_vs_goal = weight - user.goal_weight_kg if user and user.goal_weight_kg else None
+    delta_vs_goal = weight - user.goal_weight_kg if user.goal_weight_kg else None
 
     lines = [t(lang, "weight_saved")]
     if last_log:

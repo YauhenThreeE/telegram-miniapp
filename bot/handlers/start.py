@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
-from ..db import async_session_maker, get_session_maker
+from ..db import async_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import (
     activity_keyboard,
@@ -55,8 +55,7 @@ def parse_date(text: str) -> datetime | None:
     return None
 
 
-async def get_or_create_user(telegram_id: int, language: str, message: Message) -> User:
-    session_maker = get_session_maker(message.bot)
+async def get_or_create_user(telegram_id: int, language: str, session_maker, message: Message) -> User:
     async with session_maker() as session:
         user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
         if user:
@@ -76,26 +75,22 @@ async def get_or_create_user(telegram_id: int, language: str, message: Message) 
 
 
 @router.message(CommandStart())
-async def start(message: Message, state: FSMContext) -> None:
+async def start(message: Message, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     await state.clear()
-    session_maker = get_session_maker(message.bot)
-    async with session_maker() as session:
-        user = await session.scalar(select(User).where(User.telegram_id == message.from_user.id))
     if user:
-        lang = user.language
         await message.answer(t(lang, "welcome"), reply_markup=main_menu(lang))
     else:
         await message.answer(t("en", "choose_language"), reply_markup=language_keyboard())
 
 
 @router.callback_query(F.data.startswith("lang_"))
-async def language_selected(callback: CallbackQuery, state: FSMContext) -> None:
+async def language_selected(callback: CallbackQuery, state: FSMContext, session_maker) -> None:
     code = callback.data.split("_", 1)[1]
     if code not in SUPPORTED_LANGUAGES:
         await callback.answer()
         return
 
-    user = await get_or_create_user(callback.from_user.id, code, callback.message)
+    user = await get_or_create_user(callback.from_user.id, code, session_maker, callback.message)
 
     await callback.message.answer(t(code, "language_selected", language=code))
     await callback.message.answer(t(code, "welcome"))
@@ -233,7 +228,7 @@ async def onboarding_activity(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Onboarding.nutrition_goal)
-async def onboarding_goal(message: Message, state: FSMContext) -> None:
+async def onboarding_goal(message: Message, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     mapping = {
@@ -248,14 +243,13 @@ async def onboarding_goal(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(nutrition_goal=value)
 
-    await save_onboarding(state, message.from_user.id, message.bot)
+    await save_onboarding(state, message.from_user.id, session_maker)
     await message.answer(t(lang, "profile_saved"), reply_markup=main_menu(lang))
     await state.clear()
 
 
-async def save_onboarding(state: FSMContext, telegram_id: int, bot: object | None) -> None:
+async def save_onboarding(state: FSMContext, telegram_id: int, session_maker) -> None:
     data = await state.get_data()
-    session_maker = get_session_maker(bot)
     async with session_maker() as session:
         user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
         if not user:
@@ -286,11 +280,10 @@ async def save_onboarding(state: FSMContext, telegram_id: int, bot: object | Non
         }
     )
 )
-async def stub_features(message: Message, state: FSMContext) -> None:
+async def stub_features(message: Message, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language")
     if not lang:
-        session_maker = get_session_maker(message.bot)
         async with session_maker() as session:
             user = await session.scalar(select(User).where(User.telegram_id == message.from_user.id))
             lang = user.language if user else "en"

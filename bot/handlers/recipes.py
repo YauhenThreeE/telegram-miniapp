@@ -5,13 +5,19 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import desc, select
 
-from ..db import get_session_maker
 from ..i18n import SUPPORTED_LANGUAGES, t
 from ..keyboards import main_menu
 from ..models import Recipe, User
 from ..services.ai_dietitian import AiDietitianService
+from ..services.recipe_service import (
+    create_recipe,
+    delete_recipe,
+    get_recipe,
+    list_recipes,
+    update_recipe_body,
+    update_recipe_title,
+)
 
 router = Router()
 
@@ -24,14 +30,6 @@ class RecipeCreate(StatesGroup):
 class RecipeEdit(StatesGroup):
     waiting_title = State()
     waiting_body = State()
-
-
-async def _load_user(bot: object, telegram_id: int) -> tuple[User | None, str]:
-    session_maker = get_session_maker(bot)
-    async with session_maker() as session:
-        user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
-    lang = user.language if user else "en"
-    return user, lang
 
 
 def _short_title(title: str) -> str:
@@ -56,16 +54,9 @@ def _body_keyboard(lang: str) -> InlineKeyboardMarkup:
     )
 
 
-async def _send_recipes_home(message: Message, bot: object, user: User, lang: str) -> None:
-    session_maker = get_session_maker(bot)
+async def _send_recipes_home(message: Message, session_maker, user: User, lang: str) -> None:
     async with session_maker() as session:
-        result = await session.scalars(
-            select(Recipe)
-            .where(Recipe.user_id == user.id)
-            .order_by(desc(Recipe.created_at))
-            .limit(10)
-        )
-        recipes = list(result)
+        recipes = await list_recipes(session, user.id, limit=10)
 
     if recipes:
         text = "\n".join(
@@ -82,20 +73,18 @@ async def _send_recipes_home(message: Message, bot: object, user: User, lang: st
 
 @router.message(Command("recipes"))
 @router.message(F.text.in_({t(lang, "btn_recipes") for lang in SUPPORTED_LANGUAGES}))
-async def recipes_menu(message: Message, state: FSMContext) -> None:
-    user, lang = await _load_user(message.bot, message.from_user.id)
+async def recipes_menu(message: Message, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     if not user:
         await message.answer(t(lang, "profile_missing"))
         return
 
     await state.clear()
     await state.update_data(language=lang, user_id=user.id)
-    await _send_recipes_home(message, message.bot, user, lang)
+    await _send_recipes_home(message, session_maker, user, lang)
 
 
 @router.callback_query(F.data == "recipes_add")
-async def recipes_add(callback: CallbackQuery, state: FSMContext) -> None:
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
+async def recipes_add(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
@@ -108,8 +97,7 @@ async def recipes_add(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "recipes_back")
-async def recipes_back(callback: CallbackQuery, state: FSMContext) -> None:
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
+async def recipes_back(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
@@ -117,12 +105,12 @@ async def recipes_back(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.clear()
     await state.update_data(language=lang, user_id=user.id)
-    await _send_recipes_home(callback.message, callback.bot, user, lang)
+    await _send_recipes_home(callback.message, session_maker, user, lang)
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("recipes_view:"))
-async def recipes_view(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_view(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     _, recipe_id_str = callback.data.split(":", 1)
     try:
         recipe_id = int(recipe_id_str)
@@ -130,17 +118,13 @@ async def recipes_view(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
 
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
         return
 
-    session_maker = get_session_maker(callback.bot)
     async with session_maker() as session:
-        recipe = await session.scalar(
-            select(Recipe).where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-        )
+        recipe = await get_recipe(session, user.id, recipe_id)
     if not recipe:
         await callback.answer(t(lang, "recipes_not_found"), show_alert=True)
         return
@@ -174,7 +158,7 @@ async def recipes_view(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.startswith("recipes_delete:"))
-async def recipes_delete(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_delete(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     _, recipe_id_str = callback.data.split(":", 1)
     try:
         recipe_id = int(recipe_id_str)
@@ -182,27 +166,22 @@ async def recipes_delete(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
 
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
         return
 
-    session_maker = get_session_maker(callback.bot)
     async with session_maker() as session:
-        await session.execute(
-            Recipe.__table__.delete().where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-        )
-        await session.commit()
+        await delete_recipe(session, user.id, recipe_id)
 
     await callback.message.answer(t(lang, "recipes_deleted"))
     await state.update_data(language=lang, user_id=user.id)
-    await _send_recipes_home(callback.message, callback.bot, user, lang)
+    await _send_recipes_home(callback.message, session_maker, user, lang)
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("recipes_edit_title:"))
-async def recipes_edit_title(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_edit_title(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
     _, recipe_id_str = callback.data.split(":", 1)
     try:
         recipe_id = int(recipe_id_str)
@@ -210,7 +189,6 @@ async def recipes_edit_title(callback: CallbackQuery, state: FSMContext) -> None
         await callback.answer()
         return
 
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
@@ -223,7 +201,7 @@ async def recipes_edit_title(callback: CallbackQuery, state: FSMContext) -> None
 
 
 @router.callback_query(F.data.startswith("recipes_edit_body:"))
-async def recipes_edit_body(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_edit_body(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
     _, recipe_id_str = callback.data.split(":", 1)
     try:
         recipe_id = int(recipe_id_str)
@@ -231,7 +209,6 @@ async def recipes_edit_body(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
 
-    user, lang = await _load_user(callback.bot, callback.from_user.id)
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await callback.answer()
@@ -244,53 +221,57 @@ async def recipes_edit_body(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(RecipeCreate.waiting_title)
-async def recipe_title_received(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    lang = data.get("language", "en")
+async def recipe_title_received(message: Message, state: FSMContext, user: User | None, lang: str) -> None:
+    if not user:
+        await message.answer(t(lang, "profile_missing"))
+        await state.clear()
+        return
 
     title = (message.text or "").strip()
     if not title:
         await message.answer(t(lang, "recipes_prompt_title"))
         return
 
-    await state.update_data(recipe_title=title[:255])
+    await state.update_data(recipe_title=title[:255], user_id=user.id, language=lang)
     await state.set_state(RecipeCreate.waiting_body)
     await message.answer(t(lang, "recipes_prompt_body"), reply_markup=_body_keyboard(lang))
 
 
 @router.message(RecipeCreate.waiting_body)
-async def recipe_body_received(message: Message, state: FSMContext) -> None:
+async def recipe_body_received(
+    message: Message,
+    state: FSMContext,
+    user: User | None,
+    lang: str,
+    session_maker,
+) -> None:
     data = await state.get_data()
-    lang = data.get("language", "en")
-    user_id = data.get("user_id")
     title = data.get("recipe_title")
 
-    user, lang_from_user = await _load_user(message.bot, message.from_user.id)
-    lang = lang_from_user or lang
-    user_id = user_id or (user.id if user else None)
+    if not user:
+        await message.answer(t(lang, "profile_missing"))
+        await state.clear()
+        return
 
     body = (message.text or "").strip()
     if not body:
         await message.answer(t(lang, "recipes_prompt_body"), reply_markup=_body_keyboard(lang))
         return
-    if not user_id or not title:
-        await message.answer(t(lang, "profile_missing"))
+    if not title:
+        await message.answer(t(lang, "recipes_prompt_title"))
         await state.clear()
         return
 
-    session_maker = get_session_maker(message.bot)
     async with session_maker() as session:
-        session.add(Recipe(user_id=user_id, title=title[:255], body=body))
-        await session.commit()
+        await create_recipe(session, user.id, title[:255], body)
 
     await message.answer(t(lang, "recipes_saved"), reply_markup=main_menu(lang))
     await state.clear()
 
 
 @router.message(RecipeEdit.waiting_title)
-async def recipe_title_update(message: Message, state: FSMContext) -> None:
+async def recipe_title_update(message: Message, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     data = await state.get_data()
-    lang = data.get("language", "en")
     recipe_id = data.get("recipe_id")
 
     title = (message.text or "").strip()
@@ -298,30 +279,21 @@ async def recipe_title_update(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, "recipes_prompt_title"))
         return
 
-    user, lang_from_user = await _load_user(message.bot, message.from_user.id)
-    lang = lang_from_user or lang
     if not user:
         await message.answer(t(lang, "profile_missing"))
         await state.clear()
         return
 
-    session_maker = get_session_maker(message.bot)
     async with session_maker() as session:
-        await session.execute(
-            Recipe.__table__.update()
-            .where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-            .values(title=title[:255])
-        )
-        await session.commit()
+        await update_recipe_title(session, user.id, recipe_id, title[:255])
 
     await message.answer(t(lang, "recipes_updated"), reply_markup=main_menu(lang))
     await state.clear()
 
 
 @router.message(RecipeEdit.waiting_body)
-async def recipe_body_update(message: Message, state: FSMContext) -> None:
+async def recipe_body_update(message: Message, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     data = await state.get_data()
-    lang = data.get("language", "en")
     recipe_id = data.get("recipe_id")
 
     body = (message.text or "").strip()
@@ -329,46 +301,35 @@ async def recipe_body_update(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, "recipes_prompt_body"), reply_markup=_body_keyboard(lang))
         return
 
-    user, lang_from_user = await _load_user(message.bot, message.from_user.id)
-    lang = lang_from_user or lang
     if not user:
         await message.answer(t(lang, "profile_missing"))
         await state.clear()
         return
 
-    session_maker = get_session_maker(message.bot)
     async with session_maker() as session:
-        await session.execute(
-            Recipe.__table__.update()
-            .where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-            .values(body=body)
-        )
-        await session.commit()
+        await update_recipe_body(session, user.id, recipe_id, body)
 
     await message.answer(t(lang, "recipes_updated"), reply_markup=main_menu(lang))
     await state.clear()
 
 
 @router.callback_query(F.data == "recipes_ai_generate")
-async def recipes_ai_generate(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_ai_generate(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     current_state = await state.get_state()
     if current_state not in {RecipeCreate.waiting_body.state, RecipeEdit.waiting_body.state}:
         await callback.answer()
         return
 
     data = await state.get_data()
-    lang = data.get("language", "en")
+    lang = data.get("language", lang)
     title = data.get("recipe_title")
 
     if current_state == RecipeEdit.waiting_body.state and not title:
         recipe_id = data.get("recipe_id")
-        user, _ = await _load_user(callback.bot, callback.from_user.id)
         if user and recipe_id:
-            session_maker = get_session_maker(callback.bot)
             async with session_maker() as session:
-                title = await session.scalar(
-                    select(Recipe.title).where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-                )
+                recipe = await get_recipe(session, user.id, recipe_id)
+                title = recipe.title if recipe else title
 
     if not title:
         await callback.answer(t(lang, "recipes_prompt_title"), show_alert=True)
@@ -385,7 +346,7 @@ async def recipes_ai_generate(callback: CallbackQuery, state: FSMContext) -> Non
         await callback.answer()
         return
 
-    await state.update_data(ai_body=recipe_text)
+    await state.update_data(ai_body=recipe_text, recipe_title=title)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=t(lang, "recipes_ai_use_button"), callback_data="recipes_use_ai")],
@@ -400,24 +361,20 @@ async def recipes_ai_generate(callback: CallbackQuery, state: FSMContext) -> Non
 
 
 @router.callback_query(F.data == "recipes_use_ai")
-async def recipes_use_ai(callback: CallbackQuery, state: FSMContext) -> None:
+async def recipes_use_ai(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str, session_maker) -> None:
     current_state = await state.get_state()
     data = await state.get_data()
-    lang = data.get("language", "en")
+    lang = data.get("language", lang)
     ai_body = data.get("ai_body")
     if not ai_body:
         await callback.answer(t(lang, "recipes_ai_failed"), show_alert=True)
         return
 
-    user, lang_from_user = await _load_user(callback.bot, callback.from_user.id)
-    lang = lang_from_user or lang
     if not user:
         await callback.message.answer(t(lang, "profile_missing"))
         await state.clear()
         await callback.answer()
         return
-
-    session_maker = get_session_maker(callback.bot)
 
     if current_state == RecipeCreate.waiting_body.state:
         title = data.get("recipe_title")
@@ -425,8 +382,7 @@ async def recipes_use_ai(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer(t(lang, "recipes_prompt_title"), show_alert=True)
             return
         async with session_maker() as session:
-            session.add(Recipe(user_id=user.id, title=title[:255], body=ai_body))
-            await session.commit()
+            await create_recipe(session, user.id, title[:255], ai_body)
         await callback.message.answer(t(lang, "recipes_saved"), reply_markup=main_menu(lang))
         await state.clear()
         await callback.answer()
@@ -438,12 +394,7 @@ async def recipes_use_ai(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer(t(lang, "recipes_not_found"), show_alert=True)
             return
         async with session_maker() as session:
-            await session.execute(
-                Recipe.__table__.update()
-                .where(Recipe.id == recipe_id, Recipe.user_id == user.id)
-                .values(body=ai_body)
-            )
-            await session.commit()
+            await update_recipe_body(session, user.id, recipe_id, ai_body)
         await callback.message.answer(t(lang, "recipes_updated"), reply_markup=main_menu(lang))
         await state.clear()
         await callback.answer()

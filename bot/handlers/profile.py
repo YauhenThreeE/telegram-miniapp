@@ -7,7 +7,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
-from ..db import async_session_maker, get_session_maker
 from ..i18n import t
 from ..keyboards import activity_keyboard, main_menu, nutrition_goal_keyboard, profile_edit_keyboard
 from ..models import User
@@ -44,52 +43,46 @@ def format_profile(user: User, lang: str) -> str:
 
 
 @router.message(Command("profile"))
-async def view_profile(message: Message, state: FSMContext) -> None:
+async def view_profile(message: Message, state: FSMContext, user: User | None, lang: str) -> None:
     await state.clear()
-    session_maker = get_session_maker(message.bot)
-    async with session_maker() as session:
-        user = await session.scalar(select(User).where(User.telegram_id == message.from_user.id))
     if not user:
         await message.answer(t("en", "profile_missing"))
         return
-    lang = user.language
     await message.answer(format_profile(user, lang), reply_markup=profile_edit_keyboard(lang))
 
 
 @router.callback_query(F.data == "edit_weight")
-async def edit_weight(callback: CallbackQuery, state: FSMContext) -> None:
-    await set_edit_state(callback, state, EditProfile.waiting_weight)
+async def edit_weight(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
+    await set_edit_state(callback, state, EditProfile.waiting_weight, user, lang)
 
 
 @router.callback_query(F.data == "edit_height")
-async def edit_height(callback: CallbackQuery, state: FSMContext) -> None:
-    await set_edit_state(callback, state, EditProfile.waiting_height)
+async def edit_height(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
+    await set_edit_state(callback, state, EditProfile.waiting_height, user, lang)
 
 
 @router.callback_query(F.data == "edit_activity")
-async def edit_activity(callback: CallbackQuery, state: FSMContext) -> None:
-    await set_edit_state(callback, state, EditProfile.waiting_activity, keyboard=activity_keyboard)
+async def edit_activity(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
+    await set_edit_state(callback, state, EditProfile.waiting_activity, user, lang, keyboard=activity_keyboard)
 
 
 @router.callback_query(F.data == "edit_goal")
-async def edit_goal(callback: CallbackQuery, state: FSMContext) -> None:
-    await set_edit_state(callback, state, EditProfile.waiting_goal, keyboard=nutrition_goal_keyboard)
+async def edit_goal(callback: CallbackQuery, state: FSMContext, user: User | None, lang: str) -> None:
+    await set_edit_state(callback, state, EditProfile.waiting_goal, user, lang, keyboard=nutrition_goal_keyboard)
 
 
 async def set_edit_state(
     callback: CallbackQuery,
     state: FSMContext,
     new_state: State,
+    user: User | None,
+    lang: str,
     keyboard=None,
 ) -> None:
-    session_maker = get_session_maker(callback.bot)
-    async with session_maker() as session:
-        user = await session.scalar(select(User).where(User.telegram_id == callback.from_user.id))
     if not user:
         await callback.message.answer(t("en", "profile_missing"))
         await callback.answer()
         return
-    lang = user.language
     await state.set_state(new_state)
     await state.update_data(language=lang)
     reply_markup = keyboard(lang) if keyboard else None
@@ -98,17 +91,17 @@ async def set_edit_state(
 
 
 @router.message(EditProfile.waiting_weight)
-async def update_weight(message: Message, state: FSMContext) -> None:
-    await update_numeric_field(message, state, "current_weight_kg")
+async def update_weight(message: Message, state: FSMContext, session_maker) -> None:
+    await update_numeric_field(message, state, "current_weight_kg", session_maker)
 
 
 @router.message(EditProfile.waiting_height)
-async def update_height(message: Message, state: FSMContext) -> None:
-    await update_numeric_field(message, state, "height_cm")
+async def update_height(message: Message, state: FSMContext, session_maker) -> None:
+    await update_numeric_field(message, state, "height_cm", session_maker)
 
 
 @router.message(EditProfile.waiting_activity)
-async def update_activity(message: Message, state: FSMContext) -> None:
+async def update_activity(message: Message, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     mapping = {
@@ -120,12 +113,12 @@ async def update_activity(message: Message, state: FSMContext) -> None:
     if value is None:
         await message.answer(t(lang, "ask_activity_level"), reply_markup=activity_keyboard(lang))
         return
-    await save_field(message.bot, message.from_user.id, "activity_level", value)
+    await save_field(session_maker, message.from_user.id, "activity_level", value)
     await finish_edit(message, state, lang)
 
 
 @router.message(EditProfile.waiting_goal)
-async def update_goal(message: Message, state: FSMContext) -> None:
+async def update_goal(message: Message, state: FSMContext, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     mapping = {
@@ -138,7 +131,7 @@ async def update_goal(message: Message, state: FSMContext) -> None:
     if value is None:
         await message.answer(t(lang, "ask_nutrition_goal"), reply_markup=nutrition_goal_keyboard(lang))
         return
-    await save_field(message.bot, message.from_user.id, "nutrition_goal", value)
+    await save_field(session_maker, message.from_user.id, "nutrition_goal", value)
     await finish_edit(message, state, lang)
 
 
@@ -150,19 +143,18 @@ def parse_float(value: str) -> float | None:
         return None
 
 
-async def update_numeric_field(message: Message, state: FSMContext, field_name: str) -> None:
+async def update_numeric_field(message: Message, state: FSMContext, field_name: str, session_maker) -> None:
     data = await state.get_data()
     lang = data.get("language", "en")
     value = parse_float(message.text)
     if value is None:
         await message.answer(t(lang, "invalid_number"))
         return
-    await save_field(message.bot, message.from_user.id, field_name, value)
+    await save_field(session_maker, message.from_user.id, field_name, value)
     await finish_edit(message, state, lang)
 
 
-async def save_field(bot: object, telegram_id: int, field_name: str, value) -> None:
-    session_maker = get_session_maker(bot)
+async def save_field(session_maker, telegram_id: int, field_name: str, value) -> None:
     async with session_maker() as session:
         user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
         if not user:
